@@ -1,0 +1,25 @@
+kind: Composite
+
+name: PRReviewComposed
+
+stream: false
+
+description: "A PR review workflow composed from reusable workflow components."
+
+# Execution mode: "sequential" (default) or "parallel"
+# Sequential: agents/workflows execute one after another, output flows to next
+execution: sequential
+
+workflow:
+  agents:
+    # Reference the PR fetcher agent (fetches both PR details and diff)
+    - defn: ../agents/pr_fetcher.yaml
+      name: PRFetcher
+    
+    # Reference the PR reviewer agent
+    - defn: ../agents/pr_reviewer.yaml
+      name: PRReviewer
+
+output:
+  type: text
+

@@ -15,9 +15,19 @@ build:
 	@go build $(LDFLAGS) -o bin/$(BINARY_NAME) ./cmd/kinetic
 	@echo "Build complete: bin/$(BINARY_NAME)"
 
-## run: Run the application
+## run: Run the application (requires WORKFLOW and INPUT variables)
+## Example: make run WORKFLOW=examples/pr_review_composed.yaml INPUT="review PR 123"
 run:
-	@go run ./cmd/kinetic
+	@if [ -z "$(WORKFLOW)" ] || [ -z "$(INPUT)" ]; then \
+		echo "Error: WORKFLOW and INPUT are required"; \
+		echo ""; \
+		echo "Usage: make run WORKFLOW=<file> INPUT=\"<input text>\""; \
+		echo ""; \
+		echo "Example:"; \
+		echo "  make run WORKFLOW=examples/pr_review_composed.yaml INPUT=\"review PR 123\""; \
+		exit 1; \
+	fi
+	@go run ./cmd/kinetic --workflow $(WORKFLOW) --input "$(INPUT)"
 
 ## clean: Remove build artifacts
 clean:

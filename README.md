@@ -1,22 +1,23 @@
 # Kinetic
 
-Kinetic is an intelligent agent orchestrator that uses LLM-based routing to handle GitHub-related tasks, including PR reviews and cherry-pick operations. Built with Google's Agent Development Kit (ADK), it provides a flexible framework for managing multiple agent workflows.
+Kinetic is an intelligent agent orchestrator for handling GitHub-related tasks, including PR reviews and cherry-pick operations. Built with Google's Agent Development Kit (ADK), it provides a flexible YAML-based framework for defining and managing agent workflows.
 
 ## Features
 
-- **LLM-Based Router**: Intelligently routes user requests to appropriate workflows using natural language understanding
+- **YAML-Based Workflows**: Define workflows declaratively in YAML files
 - **PR Review Workflow**: Automated pull request review with code analysis and feedback
 - **Cherry-Pick Workflow**: Find merged PRs and create cherry-pick PRs automatically
-- **Multi-Provider Support**: Supports multiple LLM providers (DeepSeek, Google Gemini)
+- **Multi-Provider Support**: Supports multiple LLM providers (DeepSeek, Google Gemini, OpenAI)
 - **GitHub Integration**: Seamless integration with GitHub API for PR operations
+- **Workflow Composition**: Compose complex workflows from simpler components
 
 ## Architecture
 
-Kinetic uses a hierarchical agent architecture:
+Kinetic uses YAML-defined workflows that can be composed:
 
 ```
 ┌─────────────────┐
-│  Router Agent   │ (LLM-based intent detection)
+│  YAML Workflow  │ (Defines agent flow)
 └────────┬────────┘
          │
     ┌────┴────┐
@@ -36,7 +37,7 @@ Kinetic uses a hierarchical agent architecture:
 
 ### Components
 
-- **Router Agent**: Analyzes user intent and routes to appropriate workflow
+- **Workflow Builder**: Loads and builds agents from YAML definitions
 - **PR Review Workflow**: Sequential execution of PR Fetcher → PR Reviewer agents
 - **Cherry-Pick Workflow**: Handles finding merged PRs and creating cherry-pick PRs
 - **GitHub Tool**: Provides GitHub API integration for agents
@@ -74,23 +75,40 @@ Create an `env` file in the project root with the following variables:
 ### Model Provider Configuration
 
 ```bash
-# Options: "deepseek" or "gemini" (default: deepseek)
+# Options: "gemini", "deepseek", or "openai" (default: gemini)
 MODEL_PROVIDER=gemini
+
+# Generic model name (used if provider-specific env var is not set)
+MODEL_NAME=gemini-3-pro-preview
+```
+
+### OpenAI Configuration
+
+```bash
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4o-mini  # Optional: defaults to MODEL_NAME if not set
 ```
 
 ### DeepSeek Configuration
 
 ```bash
 DEEPSEEK_API_KEY=your_deepseek_api_key
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-chat  # Optional: defaults to MODEL_NAME if not set
 ```
 
 ### Google Gemini Configuration
 
 ```bash
 GOOGLE_API_KEY=your_google_api_key
-GEMINI_MODEL=gemini-3-pro-preview
+GEMINI_MODEL=gemini-3-pro-preview  # Optional: defaults to MODEL_NAME if not set
 ```
+
+**Note**: 
+- **Gemini is the default provider** - if `provider` is not specified in workflow YAML, Gemini will be used
+- Model names should NOT be hardcoded in workflow YAML files. They are read from environment variables in this order:
+  1. Provider-specific env var (e.g., `GEMINI_MODEL`, `OPENAI_MODEL`, `DEEPSEEK_MODEL`)
+  2. Generic `MODEL_NAME` env var
+  3. Provider default (Gemini defaults to `gemini-3-pro-preview`)
 
 ### GitHub Configuration
 
@@ -127,21 +145,20 @@ go run ./cmd/kinetic
 
 #### PR Review
 ```
-User: "review PR 1060"
+$ make run WORKFLOW=examples/pr_review_composed.yaml INPUT="review PR 1060"
 ```
 
-The router agent will detect this as a review request and route it to the PR Review workflow, which will:
+The PR Review workflow will:
 1. Fetch PR details from GitHub
 2. Analyze the code changes
 3. Provide review feedback
 
 #### Cherry-Pick Operations
 ```
-User: "find merged PRs from last week"
-User: "create cherry-pick for PR 1060"
+$ make run WORKFLOW=examples/cherry_pick.yaml INPUT="find merged PRs from last week"
 ```
 
-The router agent will detect these as cherry-pick requests and route to the Cherry-Pick workflow.
+Workflows are defined in YAML files and can be composed together.
 
 ## Development
 
@@ -152,20 +169,22 @@ kinetic/
 ├── cmd/
 │   └── kinetic/          # Main orchestrator entry point
 │       └── main.go
-├── internal/
-│   ├── agents/           # Agent implementations
-│   │   ├── router.go     # Router agent
-│   │   ├── pr_reviewer.go
-│   │   ├── pr_fetcher.go
-│   │   ├── cherry_pick.go
-│   │   └── workflow.go
+├── pkg/
 │   ├── providers/        # LLM provider implementations
 │   │   ├── factory.go
-│   │   └── deepseek.go
-│   └── tools/            # Tool implementations
-│       └── github/
-│           ├── client.go
-│           └── tools.go
+│   │   ├── deepseek.go
+│   │   └── openai.go
+│   ├── tools/            # Tool implementations
+│   │   ├── github/       # GitHub API tools
+│   │   │   ├── client.go
+│   │   │   └── tools.go
+│   │   ├── registry/     # Tool registry
+│   │   └── search/       # Search tools (Brave)
+│   └── workflow/         # Workflow builder (loads agents from YAML)
+│       ├── builder.go
+│       ├── loader.go
+│       ├── yaml.go
+│       └── parallel_agent.go
 ├── Makefile
 ├── go.mod
 └── README.md
@@ -185,13 +204,15 @@ kinetic/
 
 ### Adding New Agents
 
-1. Create a new agent file in `internal/agents/`
-2. Implement the `agent.Agent` interface
-3. Register it in the router or create a new workflow
+1. Create a new agent definition YAML file in `agents/` (or your workflow directory)
+2. Define the agent configuration (name, instructions, tools, model)
+3. Reference the agent definition YAML file in workflows or run it directly
+
+Agents are created generically from YAML definitions - no Go code needed!
 
 ### Adding New LLM Providers
 
-1. Create a provider implementation in `internal/providers/`
+1. Create a provider implementation in `pkg/providers/`
 2. Add the provider case to `CreateModel()` in `factory.go`
 3. Update environment variable documentation
 
